@@ -25,8 +25,8 @@ func TestOracleIntegration(t *testing.T) {
 		FilterInput: &types.FilterInput{
 			LogicalOperator: "AND",
 			Conditions: []types.FilterCondition{
-				{Column: "col_timestamp", Operator: ">=", Value: "2023-01-01T12:00:00"},
-				{Column: "col_int", Operator: ">", Value: 0},
+				{Column: "COL_TIMESTAMP", Operator: ">=", Value: "2023-01-01T12:00:00"},
+				{Column: "COL_INT", Operator: ">", Value: 0},
 			},
 		},
 	}

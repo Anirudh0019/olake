@@ -160,7 +160,7 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 				col_timestamp, col_timestamptz, col_uuid, col_varbit, col_xml,
 				col_point, col_polygon, col_circle
 			) VALUES (
-				100, 111111111111111, FALSE, 'f', 'filter_val',
+				1100, 111111111111111, FALSE, 'f', 'filter_val',
 				'filtered_val', '2022-06-15', 50.00,
 				50.123456, 50.12, 0, 50, 5000,
 				'30 minutes', '{"filtered": "value"}', '{"filtered": "value"}',

@@ -137,7 +137,6 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 		// Filter: id_timestamp >= "2023-01-01T12:00:00Z" AND id_int > 0
 		// This insert has timestamp in 2022 and id_int = 0, so it should be filtered
 		doc := bson.M{
-			"id":                1100,
 			"id_bigint":         int64(111111111111111),
 			"id_int":            int32(0),                                      // Should be filtered: <= 0
 			"id_timestamp":      time.Date(2022, 6, 15, 10, 0, 0, 0, time.UTC), // Should be filtered: before 2023-01-01

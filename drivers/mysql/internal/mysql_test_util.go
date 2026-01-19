@@ -94,7 +94,7 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 	case "insert":
 		query = fmt.Sprintf(`
 			INSERT INTO %s (
-			id_cursor, id, id_bigint,
+			id_cursor, id_bigint,
 			id_int, id_int_unsigned, id_integer, id_integer_unsigned,
 			id_mediumint, id_mediumint_unsigned, id_smallint, id_smallint_unsigned,
 			id_tinyint, id_tinyint_unsigned, price_decimal, amount_decimal_9_2, price_double,
@@ -104,7 +104,7 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 			created_timestamp, is_active,
 			long_varchar, name_bool, status, priority
 		) VALUES (
-			6, 6, 123456789012345,
+			6, 123456789012345,
 			100, 101, 102, 103,
 			5001, 5002, 101, 102,
 			50, 51,
@@ -147,7 +147,7 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 		// This insert has timestamp in 2022 and id_int = 0, so it should be filtered
 		query = fmt.Sprintf(`
 			INSERT INTO %s (
-			id_cursor, id, id_bigint,
+			id_cursor, id_bigint,
 			id_int, id_int_unsigned, id_integer, id_integer_unsigned,
 			id_mediumint, id_mediumint_unsigned, id_smallint, id_smallint_unsigned,
 			id_tinyint, id_tinyint_unsigned, price_decimal, amount_decimal_9_2, price_double,
@@ -157,7 +157,7 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 			created_timestamp, is_active,
 			long_varchar, name_bool, status, priority
 		) VALUES (
-			1100, 1100, 111111111111111,
+			1100, 111111111111111,
 			0, 101, 102, 103,
 			5001, 5002, 101, 102,
 			50, 51,

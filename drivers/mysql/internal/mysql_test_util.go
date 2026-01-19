@@ -157,7 +157,7 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 			created_timestamp, is_active,
 			long_varchar, name_bool, status, priority
 		) VALUES (
-			1100, 100, 111111111111111,
+			1100, 1100, 111111111111111,
 			0, 101, 102, 103,
 			5001, 5002, 101, 102,
 			50, 51,

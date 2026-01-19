@@ -146,6 +146,41 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 	case "delete":
 		query = fmt.Sprintf("DELETE FROM %s WHERE col_bigserial = 1", integrationTestTable)
 
+	case "filter_insert":
+		// Insert data that should be filtered out
+		// Filter: col_timestamp >= "2023-01-01T12:00:00Z" AND col_int > 0
+		// This insert has timestamp in 2022 and col_int = 0, so it should be filtered
+		query = fmt.Sprintf(`
+			INSERT INTO %s (
+				col_cursor, col_bigint, col_bool, col_char, col_character,
+				col_character_varying, col_date, col_decimal,
+				col_double_precision, col_float4, col_int, col_int2,
+				col_integer, col_interval, col_json, col_jsonb,
+				col_name, col_numeric, col_real, col_text,
+				col_timestamp, col_timestamptz, col_uuid, col_varbit, col_xml,
+				col_point, col_polygon, col_circle
+			) VALUES (
+				100, 111111111111111, FALSE, 'f', 'filter_val',
+				'filtered_val', '2022-06-15', 50.00,
+				50.123456, 50.12, 0, 50, 5000,
+				'30 minutes', '{"filtered": "value"}', '{"filtered": "value"}',
+				'filtered_name', 50.00, 50.00, 'filtered text',
+				'2022-06-15 10:00:00', '2022-06-15 10:00:00+00',
+				'00000000-0000-0000-0000-000000000001', B'000000',
+				'<filtered>value</filtered>',
+				'(0.0,0.0)'::point,
+				'((0,0),(1,0),(1,1),(0,1),(0,0))'::polygon,
+				'<(0,0),1.0>'::circle
+			)`, integrationTestTable)
+
+	case "filter_update":
+		// Update a record to have values that should be filtered out
+		query = fmt.Sprintf(`
+			UPDATE %s SET
+				col_int = -5,
+				col_timestamp = '2021-03-01 08:00:00'
+			WHERE col_bigserial = 2`, integrationTestTable)
+
 	case "setup_cdc":
 		for _, cdcStream := range streams {
 			_, err := db.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s", cdcStream))

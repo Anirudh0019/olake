@@ -96,6 +96,34 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 	case "delete":
 		query = fmt.Sprintf("DELETE FROM %s WHERE id = 1", integrationTestTable)
 
+	case "filter_insert":
+		// Insert data that should be filtered out
+		// Filter: col_timestamp >= "2023-01-01T12:00:00Z" AND col_int > 0
+		// This insert has timestamp in 2022 and col_int = 0, so it should be filtered
+		query = fmt.Sprintf(`
+			INSERT INTO %s (
+				col_cursor, col_bigint, col_char, col_character,
+				col_varchar2, col_date, col_decimal,
+				col_double_precision, col_float, col_int, col_smallint,
+				col_integer, col_clob, col_nclob, col_timestamp, col_timestamptz, col_timestampltz
+			) VALUES (
+				100, 111111111111111, 'f', 'filter_val',
+				'filtered_val', TO_DATE('2022-06-15', 'YYYY-MM-DD'), 50.00,
+				50.123456, 50.0, 0, 50, 5000,
+				'filtered text', 'filtered nclob',
+				TIMESTAMP '2022-06-15 10:00:00',
+				TIMESTAMP '2022-06-15 10:00:00+00:00',
+				TIMESTAMP '2022-06-15 10:00:00+05:30'
+			)`, integrationTestTable)
+
+	case "filter_update":
+		// Update a record to have values that should be filtered out
+		query = fmt.Sprintf(`
+			UPDATE %s SET
+				col_int = -5,
+				col_timestamp = TIMESTAMP '2021-03-01 08:00:00'
+			WHERE id = 2`, integrationTestTable)
+
 	case "evolve-schema":
 		query = fmt.Sprintf(`ALTER TABLE %s MODIFY (col_int NUMBER(19,0), col_decimal NUMBER(20,2))`, integrationTestTable)
 

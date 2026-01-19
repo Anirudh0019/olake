@@ -141,6 +141,42 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 	case "delete":
 		query = fmt.Sprintf("DELETE FROM %s WHERE id = 1", integrationTestTable)
 
+	case "filter_insert":
+		// Insert data that should be filtered out
+		// Filter: created_timestamp >= "2023-01-01T12:00:00Z" AND id_int > 0
+		// This insert has timestamp in 2022 and id_int = 0, so it should be filtered
+		query = fmt.Sprintf(`
+			INSERT INTO %s (
+			id_cursor, id, id_bigint,
+			id_int, id_int_unsigned, id_integer, id_integer_unsigned,
+			id_mediumint, id_mediumint_unsigned, id_smallint, id_smallint_unsigned,
+			id_tinyint, id_tinyint_unsigned, price_decimal, amount_decimal_9_2, price_double,
+			price_double_precision, price_float, price_numeric, price_real,
+			name_char, name_varchar, name_text, name_tinytext,
+			name_mediumtext, name_longtext, created_date,
+			created_timestamp, is_active,
+			long_varchar, name_bool, status, priority
+		) VALUES (
+			100, 100, 111111111111111,
+			0, 101, 102, 103,
+			5001, 5002, 101, 102,
+			50, 51,
+			123.45, 5330197.27, 123.456,
+			123.456,  123.45, 123.45, 123.456,
+			'f', 'filtered_val', 'filtered_text', 'filtered_tiny',
+			'filtered_medium', 'filtered_long', '2022-06-15 10:00:00',
+			'2022-06-15 10:00:00', 0,
+			'filtered_long_varchar', 0, 'inactive', 'low'
+		)`, integrationTestTable)
+
+	case "filter_update":
+		// Update a record to have values that should be filtered out
+		query = fmt.Sprintf(`
+			UPDATE %s SET
+				id_int = -5,
+				created_timestamp = '2021-03-01 08:00:00'
+			WHERE id = 2`, integrationTestTable)
+
 	case "setup_cdc":
 		backfillStreams := testutils.GetBackfillStreamsFromCDC(streams)
 		// truncate the cdc tables

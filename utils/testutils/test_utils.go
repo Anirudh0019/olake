@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/apache/spark-connect-go/v35/spark/sql"
 	"github.com/apache/spark-connect-go/v35/spark/sql/types"
 	"github.com/datazip-inc/olake/constants"
+	olaketypes "github.com/datazip-inc/olake/types"
 	"github.com/datazip-inc/olake/utils"
 	"github.com/datazip-inc/olake/utils/logger"
 	"github.com/datazip-inc/olake/utils/typeutils"
@@ -46,6 +48,10 @@ type IntegrationTest struct {
 	DestinationDB                    string
 	CursorField                      string
 	PartitionRegex                   string
+	// FilterInput configuration for filtering records during sync (Go struct)
+	FilterInput *olaketypes.FilterInput
+	// FilterInputJSON raw JSON string for filter input (preferred over FilterInput if provided)
+	FilterInputJSON string
 }
 
 type PerformanceTest struct {
@@ -225,7 +231,7 @@ func discoverCommand(config TestConfig, flags ...string) string {
 }
 
 // update normalization=true for selected streams under selected_streams.<namespace> by name
-func updateSelectedStreamsCommand(config TestConfig, namespace, partitionRegex string, stream []string, isBackfill bool) string {
+func updateSelectedStreamsCommand(config TestConfig, namespace, partitionRegex string, stream []string, isBackfill bool, filterInput *olaketypes.FilterInput) string {
 	if len(stream) == 0 {
 		return ""
 	}
@@ -236,12 +242,26 @@ func updateSelectedStreamsCommand(config TestConfig, namespace, partitionRegex s
 	}
 	condition := strings.Join(streamConditions, " or ")
 	tmpCatalog := fmt.Sprintf("/tmp/%s_%s_streams.json", config.Driver, utils.Ternary(isBackfill, "backfill", "cdc").(string))
+
+	// Base jq expression with normalization and partition_regex
 	jqExpr := fmt.Sprintf(
-		`jq '.selected_streams = { "%s": (.selected_streams["%s"] | map(select(%s) | .normalization = true | .partition_regex = "%s")) }' %s > %s && mv %s %s`,
+		`jq '.selected_streams = { "%s": (.selected_streams["%s"] | map(select(%s) | .normalization = true | .partition_regex = "%s"`,
 		namespace,
 		namespace,
 		condition,
 		partitionRegex,
+	)
+
+	// Add filter_input if provided
+	if filterInput != nil && len(filterInput.Conditions) > 0 {
+		filterJSON, err := json.Marshal(filterInput)
+		if err == nil {
+			jqExpr += fmt.Sprintf(` | .filter_input = %s`, string(filterJSON))
+		}
+	}
+
+	// Close the jq expression
+	jqExpr += fmt.Sprintf(`)) }' %s > %s && mv %s %s`,
 		config.CatalogPath,
 		tmpCatalog,
 		tmpCatalog,
@@ -283,6 +303,10 @@ func (cfg *IntegrationTest) resetTable(ctx context.Context, t *testing.T, testTa
 	cfg.ExecuteQuery(ctx, t, []string{testTable}, "drop", false)
 	cfg.ExecuteQuery(ctx, t, []string{testTable}, "create", false)
 	cfg.ExecuteQuery(ctx, t, []string{testTable}, "add", false)
+	// Also insert filtered records when FilterInput is configured (for Full-Refresh test)
+	if cfg.FilterInput != nil && len(cfg.FilterInput.Conditions) > 0 {
+		cfg.ExecuteQuery(ctx, t, []string{testTable}, "filter_insert", false)
+	}
 	return nil
 }
 
@@ -359,6 +383,16 @@ func (cfg *IntegrationTest) runSyncAndVerify(
 	// Execute operation before sync if needed
 	if useState && operation != "" {
 		cfg.ExecuteQuery(ctx, t, []string{testTable}, operation, false)
+
+		// Also insert filtered records alongside regular operations when FilterInput is configured
+		if cfg.FilterInput != nil && len(cfg.FilterInput.Conditions) > 0 {
+			switch operation {
+			case "insert":
+				cfg.ExecuteQuery(ctx, t, []string{testTable}, "filter_insert", false)
+			case "update":
+				cfg.ExecuteQuery(ctx, t, []string{testTable}, "filter_update", false)
+			}
+		}
 	}
 
 	// Run sync command
@@ -470,7 +504,7 @@ func (cfg *IntegrationTest) testIcebergFullLoadAndCDC(
 	return nil
 }
 
-// testIcebergFullLoadAndCDC tests Full load and CDC operations
+// testParquetFullLoadAndCDC tests Full load and CDC operations
 func (cfg *IntegrationTest) testParquetFullLoadAndCDC(
 	ctx context.Context,
 	t *testing.T,
@@ -837,14 +871,14 @@ func (cfg *IntegrationTest) TestIntegration(t *testing.T) {
 							// 	`jq '(.selected_streams[][] | .normalization) = true' %s > /tmp/streams.json && mv /tmp/streams.json %s`,
 							// 	cfg.TestConfig.CatalogPath, cfg.TestConfig.CatalogPath,
 							// )
-							streamUpdateCmd := updateSelectedStreamsCommand(*cfg.TestConfig, cfg.Namespace, cfg.PartitionRegex, []string{currentTestTable}, true)
+							streamUpdateCmd := updateSelectedStreamsCommand(*cfg.TestConfig, cfg.Namespace, cfg.PartitionRegex, []string{currentTestTable}, true, cfg.FilterInput)
 							if code, out, err := utils.ExecCommand(ctx, c, streamUpdateCmd); err != nil || code != 0 {
-								return fmt.Errorf("failed to enable normalization and partition regex in streams.json (%d): %s\n%s",
+								return fmt.Errorf("failed to enable normalization, partition regex and filter in streams.json (%d): %s\n%s",
 									code, err, out,
 								)
 							}
 
-							t.Logf("Enabled normalization and added partition regex in %s", cfg.TestConfig.CatalogPath)
+							t.Logf("Enabled normalization, partition regex and filter in %s", cfg.TestConfig.CatalogPath)
 
 							if !slices.Contains(constants.SkipCDCDrivers, constants.DriverType(cfg.TestConfig.Driver)) {
 								t.Run("Iceberg Full load + CDC tests", func(t *testing.T) {
@@ -1232,7 +1266,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 							}
 							t.Log("(backfill) discover completed")
 
-							updateStreamsCmd := updateSelectedStreamsCommand(*cfg.TestConfig, cfg.Namespace, "", cfg.BackfillStreams, true)
+							updateStreamsCmd := updateSelectedStreamsCommand(*cfg.TestConfig, cfg.Namespace, "", cfg.BackfillStreams, true, nil)
 							if code, _, err := utils.ExecCommand(ctx, c, updateStreamsCmd); err != nil || code != 0 {
 								return fmt.Errorf("failed to update streams: %s", err)
 							}
@@ -1271,7 +1305,7 @@ func (cfg *PerformanceTest) TestPerformance(t *testing.T) {
 								}
 								t.Log("(cdc) discover completed")
 
-								updateStreamsCmd := updateSelectedStreamsCommand(*cfg.TestConfig, cfg.Namespace, "", cfg.CDCStreams, false)
+								updateStreamsCmd := updateSelectedStreamsCommand(*cfg.TestConfig, cfg.Namespace, "", cfg.CDCStreams, false, nil)
 								if code, _, err := utils.ExecCommand(ctx, c, updateStreamsCmd); err != nil || code != 0 {
 									return fmt.Errorf("failed to update streams: %s", err)
 								}

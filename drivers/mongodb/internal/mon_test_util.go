@@ -132,6 +132,41 @@ func ExecuteQuery(ctx context.Context, t *testing.T, streams []string, operation
 		_, err := collection.DeleteOne(ctx, filter)
 		require.NoError(t, err, "Failed to delete document")
 
+	case "filter_insert":
+		// Insert data that should be filtered out (timestamp before filter value and int <= filter value)
+		// Filter: id_timestamp >= "2023-01-01T12:00:00Z" AND id_int > 0
+		// This insert has timestamp in 2022 and id_int = 0, so it should be filtered
+		doc := bson.M{
+			"id":                100,
+			"id_bigint":         int64(111111111111111),
+			"id_int":            int32(0),                                      // Should be filtered: <= 0
+			"id_timestamp":      time.Date(2022, 6, 15, 10, 0, 0, 0, time.UTC), // Should be filtered: before 2023-01-01
+			"id_double":         float64(50.123),
+			"id_bool":           false,
+			"id_cursor":         int32(100),
+			"created_timestamp": primitive.Timestamp{T: uint32(1654905992), I: 1},
+			"id_nil":            nil,
+			"id_regex":          primitive.Regex{Pattern: "filtered.*", Options: "i"},
+			"id_nested":         nestedDoc,
+			"id_minkey":         primitive.MinKey{},
+			"id_maxkey":         primitive.MaxKey{},
+			"name_varchar":      "filtered_value",
+		}
+		_, err := collection.InsertOne(ctx, doc)
+		require.NoError(t, err, "Failed to insert filtered document")
+
+	case "filter_update":
+		// Update a record to have values that should be filtered out
+		filter := bson.M{"id": 2}
+		update := bson.M{
+			"$set": bson.M{
+				"id_int":       int32(-5),                                   // Should be filtered: <= 0
+				"id_timestamp": time.Date(2021, 3, 1, 8, 0, 0, 0, time.UTC), // Should be filtered: before 2023-01-01
+			},
+		}
+		_, err := collection.UpdateOne(ctx, filter, update)
+		require.NoError(t, err, "Failed to update document for filter test")
+
 	case "setup_cdc":
 		// truncate the cdc tables
 		for _, cdcStream := range streams {
